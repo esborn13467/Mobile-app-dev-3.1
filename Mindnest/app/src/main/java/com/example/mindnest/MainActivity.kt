@@ -5,26 +5,52 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.core.net.toUri
+import com.example.mindnest.distract.DistractionViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,6 +72,8 @@ fun MindnestEmergencyApp() {
             composable("emergency") { EmergencyContactsScreen(navController) }
             composable("distract") { DistractMeScreen(navController) }
             composable("selfcare") { SelfCareScreen(navController) }
+            composable("distract-content") { DistractMeContentScreen()
+            }
         }
     }
 }
@@ -261,6 +289,11 @@ fun DistractMeScreen(navController: NavHostController) {
                     modifier = Modifier
                         .padding(16.dp)
                         .fillMaxWidth()
+                        .clickable {
+                            if (game == "Quick Doodle") {
+                                navController.navigate("distract-content")
+                            }
+                        }
                 )
                 HorizontalDivider(
                     thickness = 1.dp,
@@ -270,6 +303,43 @@ fun DistractMeScreen(navController: NavHostController) {
         }
     }
 }
+
+// A Distract Me Content Screen that shows a quote/fact/joke pulled from Room DB
+@Composable
+fun DistractMeContentScreen() {
+    // Grabs the ViewModel instance
+    val viewModel: DistractionViewModel = viewModel()
+
+    // Observes the current distraction from the ViewModel
+    val distraction by viewModel.distraction.collectAsState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Title
+        Text("Your Distraction", style = MaterialTheme.typography.headlineSmall)
+
+        Spacer(modifier = Modifier.height(40.dp))
+
+        // Displays the distraction or "Loading..." if null
+        Text(
+            text = distraction?.content ?: "Loading...",
+            style = MaterialTheme.typography.bodyLarge
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Button to fetch a new random distraction
+        Button(onClick = { viewModel.refreshDistraction() }) {
+            Text("Show Me Another")
+        }
+    }
+}
+
 
 // 6. Self Care Screen
 @Composable
