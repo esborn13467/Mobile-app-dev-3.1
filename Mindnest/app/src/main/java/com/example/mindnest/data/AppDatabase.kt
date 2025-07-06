@@ -5,26 +5,30 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import model.Distraction
+import model.User
 
-// Room database class that holds the distraction table and provides the DAO
-@Database(entities = [Distraction::class], version = 1)
+@Database(
+    entities = [User::class, Distraction::class],
+    version = 2,  // Incremented version since we're adding a new table
+    exportSchema = false
+)
 abstract class AppDatabase : RoomDatabase() {
-
-    // Exposes the DistractionDao for queries and insertions
+    abstract fun userDao(): UserDao
     abstract fun distractionDao(): DistractionDao
 
     companion object {
-        // Ensures only one instance of the database is created (Singleton pattern)
-        @Volatile private var INSTANCE: AppDatabase? = null
+        @Volatile
+        private var INSTANCE: AppDatabase? = null
 
-        // Returns the database instance, creating it if necessary
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "mindnest_db" // Name of the SQLite DB
-                ).fallbackToDestructiveMigration().build()
+                    "mindnest_db"
+                )
+                    .fallbackToDestructiveMigration() // Only for development!
+                    .build()
                 INSTANCE = instance
                 instance
             }

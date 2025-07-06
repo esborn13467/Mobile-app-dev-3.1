@@ -1,5 +1,3 @@
-@file:Suppress("DEPRECATION")
-
 package com.example.mindnest
 
 import android.app.AlarmManager
@@ -39,12 +37,21 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.core.net.toUri
+import androidx.lifecycle.viewmodel.compose.viewModel
+import model.User
+import model.UserRepository
+import com.example.mindnest.ui.MindNestDatabase
+import model.ReminderReceiver
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import com.example.mindnest.distract.DistractionViewModel
+
 
 class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.S)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        MindNestDatabase.getDatabase(this)
         setContent {
             MindnestEmergencyApp()
         }
@@ -73,6 +80,10 @@ fun MindnestEmergencyApp() {
 fun LoginScreen(navController: NavHostController) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val userRepository = remember { UserRepository(context) }
+    val coroutineScope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier
@@ -82,6 +93,12 @@ fun LoginScreen(navController: NavHostController) {
     ) {
         Text("Login", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(16.dp))
+
+        if (errorMessage.isNotEmpty()) {
+            Text(errorMessage, color = Color.Red)
+            Spacer(Modifier.height(8.dp))
+        }
+
         OutlinedTextField(
             value = email,
             onValueChange = { email = it },
@@ -97,7 +114,20 @@ fun LoginScreen(navController: NavHostController) {
         )
         Spacer(Modifier.height(24.dp))
         Button(
-            onClick = { navController.navigate("home") },
+            onClick = {
+                if (email.isBlank() || password.isBlank()) {
+                    errorMessage = "Please enter email and password"
+                } else {
+                    coroutineScope.launch {
+                        val user = userRepository.loginUser(email, password)
+                        if (user != null) {
+                            navController.navigate("home")
+                        } else {
+                            errorMessage = "Invalid email or password"
+                        }
+                    }
+                }
+            },
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Sign In")
@@ -114,6 +144,10 @@ fun RegistrationScreen(navController: NavHostController) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var birthday by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val userRepository = remember { UserRepository(context) }
+    val coroutineScope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier
@@ -123,13 +157,19 @@ fun RegistrationScreen(navController: NavHostController) {
     ) {
         Text("Register", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(8.dp))
+
+        if (errorMessage.isNotEmpty()) {
+            Text(errorMessage, color = Color.Red)
+            Spacer(Modifier.height(8.dp))
+        }
+
         OutlinedTextField(
             value = username,
             onValueChange = { username = it },
             label = { Text("Username") },
             modifier = Modifier.fillMaxWidth()
         )
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(8.dp))
         OutlinedTextField(
             value = email,
             onValueChange = { email = it },
@@ -152,7 +192,31 @@ fun RegistrationScreen(navController: NavHostController) {
         )
         Spacer(Modifier.height(24.dp))
         Button(
-            onClick = { navController.navigate("home") },
+            onClick = {
+                when {
+                    username.isBlank() -> errorMessage = "Username required"
+                    email.isBlank() -> errorMessage = "Email required"
+                    !email.contains("@") -> errorMessage = "Invalid email format"
+                    password.length < 6 -> errorMessage = "Password too short (min 6 characters)"
+                    birthday.isBlank() -> errorMessage = "Birthday required"
+                    else -> {
+                        coroutineScope.launch {
+                            val user = User(
+                                username = username,
+                                email = email,
+                                password = password, // Should be hashed!
+                                birthday = birthday
+                            )
+                            val success = userRepository.registerUser(user)
+                            if (success) {
+                                navController.navigate("home")
+                            } else {
+                                errorMessage = "Email already registered"
+                            }
+                        }
+                    }
+                }
+            },
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Create Account")
@@ -235,12 +299,8 @@ fun EmergencyContactsScreen(navController: NavHostController) {
 @Composable
 fun DistractMeScreen(navController: NavHostController) {
     val context = LocalContext.current
-    val activities = listOf(
-        DistractActivity("Breathing Bubble", "Follow the bubble to calm your mind"),
-        DistractActivity("5-4-3-2-1 Grounding", "A technique to reduce anxiety"),
-        DistractActivity("Quick Doodle", "Scribble to release stress"),
-        DistractActivity("Positive Affirmations", "Boost your mood instantly")
-    )
+    val viewModel: DistractionViewModel = viewModel()
+    val distraction by viewModel.distraction.collectAsState()
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -251,6 +311,45 @@ fun DistractMeScreen(navController: NavHostController) {
         }
 
         Spacer(Modifier.height(16.dp))
+
+        // Random distraction section
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("Random Distraction", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = distraction?.content ?: "Loading...",
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = { viewModel.refreshDistraction() }) {
+                    Text("Get Another Distraction")
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // Existing activities grid
+        Text("Guided Activities", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(8.dp))
+
+        val activities = listOf(
+            DistractActivity("Breathing Bubble", "Follow the bubble to calm your mind"),
+            DistractActivity("5-4-3-2-1 Grounding", "A technique to reduce anxiety"),
+            DistractActivity("Positive Affirmations", "Boost your mood instantly")
+        )
 
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
@@ -267,9 +366,9 @@ fun DistractMeScreen(navController: NavHostController) {
                             "5-4-3-2-1 Grounding" -> navController.navigate("grounding")
                             else -> {
                                 Toast.makeText(
-                                context,
-                                "${activity.title} launched",
-                                Toast.LENGTH_SHORT
+                                    context,
+                                    "${activity.title} launched",
+                                    Toast.LENGTH_SHORT
                                 ).show()
                             }
                         }
